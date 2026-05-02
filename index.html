@@ -1,0 +1,528 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Fleet System | Cloud Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        :root {
+            --neon-green: #10b981;
+            --neon-blue: #3b82f6;
+            --neon-red: #ef4444;
+            --neon-yellow: #f59e0b;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #0a0a0a;
+            color: #d1d5db;
+            overflow-x: hidden;
+            margin: 0;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 50% 100%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+        }
+
+        .glow-text-green { color: var(--neon-green); text-shadow: 0 0 8px rgba(16, 185, 129, 0.6); }
+        .glow-text-blue { color: var(--neon-blue); text-shadow: 0 0 8px rgba(59, 130, 246, 0.6); }
+        .glow-text-red { color: var(--neon-red); text-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+        .glow-text-yellow { color: var(--neon-yellow); text-shadow: 0 0 8px rgba(245, 158, 11, 0.6); }
+
+        .glass-panel {
+            background: rgba(15, 20, 25, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            border-radius: 0.75rem;
+        }
+
+        .cyber-input {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #4b5563;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .cyber-input:focus {
+            border-color: var(--neon-blue);
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+            outline: none;
+        }
+
+        .fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .dot-green { background-color: var(--neon-green); box-shadow: 0 0 8px var(--neon-green); animation: pulse 2s infinite; }
+        .dot-red { background-color: var(--neon-red); box-shadow: 0 0 8px var(--neon-red); }
+        .dot-yellow { background-color: var(--neon-yellow); box-shadow: 0 0 8px var(--neon-yellow); }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        
+        #sys-log { max-height: 120px; overflow-y: auto; font-size: 0.75rem; }
+        
+        /* Scrollbar aesthetics */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative">
+
+    <!-- Top Navigation Bar -->
+    <header class="p-4 border-b border-gray-800 glass-panel flex flex-col sm:flex-row justify-between items-center z-20 sticky top-0 rounded-none">
+        <div class="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
+            <h1 class="text-xl md:text-2xl font-bold tracking-widest glow-text-green transition-colors duration-300" id="app-title">SYS.TARGET_NODE</h1>
+            <div class="text-xs text-gray-400 flex items-center bg-gray-900/50 px-3 py-1 rounded-full border border-gray-700">
+                <span id="cloud-status-dot" class="status-dot dot-red"></span>
+                <span id="cloud-status-text" class="tracking-wider">DB OFFLINE</span>
+            </div>
+        </div>
+        
+        <div class="mt-4 sm:mt-0 flex gap-4 items-center w-full sm:w-auto justify-end">
+            <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-200 transition-colors bg-gray-900/50 px-3 py-2 rounded border border-gray-800" title="Uncheck to use real hardware GPS">
+                <input type="checkbox" id="dev-sim-toggle" class="form-checkbox bg-gray-800 border-gray-600 rounded text-blue-500 focus:ring-0 focus:ring-offset-0" checked>
+                MOCK GPS
+            </label>
+            <button id="view-toggle-btn" class="px-5 py-2 border border-gray-600 hover:border-blue-500 hover:bg-blue-900/20 text-gray-300 text-xs md:text-sm tracking-wider transition-all rounded">
+                SWITCH TO DISPATCH
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow flex items-center justify-center p-4 z-10 relative">
+        
+        <!-- ======================================================== -->
+        <!-- VIEW 1: TARGET (The Broadcaster / Driver)                -->
+        <!-- ======================================================== -->
+        <div id="view-target" class="w-full max-w-lg glass-panel p-6 fade-in">
+            <div class="text-center mb-6">
+                <h2 class="text-gray-400 text-sm tracking-widest border-b border-gray-800 pb-2 inline-block">DEVICE BROADCASTER</h2>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs text-gray-500 mb-2">IDENTIFICATION KEY (PHONE/ID)</label>
+                <input type="text" id="target-id-input" placeholder="e.g. +8801912345678" class="w-full p-4 text-center text-lg md:text-xl tracking-widest cyber-input rounded-lg" autocomplete="off">
+            </div>
+
+            <button id="btn-broadcast" class="w-full py-4 bg-emerald-900/20 hover:bg-emerald-900/40 border border-emerald-700/50 text-emerald-400 font-bold tracking-widest transition-all rounded-lg disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+                INITIATE UPLINK
+            </button>
+
+            <!-- Active Data Display -->
+            <div id="target-telemetry" class="mt-6 hidden">
+                <div class="bg-black/40 border border-gray-800 rounded-lg p-4 mb-4">
+                    <p class="text-[10px] text-gray-500 mb-1 tracking-widest">GEOCODED LOCATION</p>
+                    <p class="text-sm md:text-md glow-text-green font-semibold" id="t-address">Resolving coordinates...</p>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="bg-black/40 border border-gray-800 rounded-lg p-3 text-center">
+                        <p class="text-[10px] text-gray-500 tracking-widest mb-1">LATITUDE</p>
+                        <p class="font-mono text-gray-300" id="t-lat">--.------</p>
+                    </div>
+                    <div class="bg-black/40 border border-gray-800 rounded-lg p-3 text-center">
+                        <p class="text-[10px] text-gray-500 tracking-widest mb-1">LONGITUDE</p>
+                        <p class="font-mono text-gray-300" id="t-lng">--.------</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- VIEW 2: DISPATCH (The Receiver / Headquarters)           -->
+        <!-- ======================================================== -->
+        <div id="view-dispatch" class="w-full max-w-2xl glass-panel p-6 hidden">
+            <div class="text-center mb-6">
+                <h2 class="text-blue-400 text-sm tracking-widest border-b border-gray-800 pb-2 inline-block">LIVE TRACKING TERMINAL</h2>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3 mb-6">
+                <input type="text" id="dispatch-id-input" placeholder="ENTER TARGET ID TO TRACE" class="flex-grow p-3 text-center sm:text-left text-lg tracking-widest cyber-input rounded-lg" autocomplete="off">
+                <button id="btn-trace" class="px-8 py-3 bg-blue-900/30 hover:bg-blue-800/50 border border-blue-700/50 text-blue-300 font-bold tracking-widest transition-all rounded-lg">
+                    SUBSCRIBE
+                </button>
+            </div>
+
+            <!-- Intercepted Data Panel -->
+            <div id="dispatch-results" class="opacity-40 transition-opacity duration-300">
+                <div class="bg-black/40 border border-gray-800 rounded-lg p-5 space-y-4 font-mono text-sm">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-3 gap-2">
+                        <span class="text-gray-500 text-xs tracking-widest">SIGNAL STATUS</span>
+                        <span id="d-status" class="glow-text-red bg-red-900/20 px-3 py-1 rounded text-xs tracking-wider border border-red-900/50">NO CONNECTION</span>
+                    </div>
+                    
+                    <div class="flex flex-col border-b border-gray-800 pb-3">
+                        <span class="text-gray-500 text-[10px] tracking-widest mb-1">RESOLVED ADDRESS</span>
+                        <span id="d-address" class="text-gray-200 text-base leading-tight">--</span>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-3 gap-2">
+                        <span class="text-gray-500 text-[10px] tracking-widest">RAW COORDINATES</span>
+                        <span class="text-blue-300 font-bold"><span id="d-lat">--</span>, <span id="d-lng">--</span></span>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <span class="text-gray-500 text-[10px] tracking-widest">LAST CLOUD SYNC</span>
+                        <span id="d-time" class="text-gray-400 text-xs">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Diagnostics Console -->
+    <footer class="border-t border-gray-800 bg-[#050505] p-2 z-20">
+        <div class="max-w-4xl mx-auto w-full">
+            <p class="text-[10px] text-gray-600 mb-1 tracking-widest border-b border-gray-800 pb-1">SYSTEM_LOG</p>
+            <div id="sys-log" class="text-gray-400 font-mono flex flex-col gap-1">
+                <span class="text-green-700">System booted. Awaiting initialization...</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ======================================================== -->
+    <!-- ENTERPRISE LOGIC ENGINE                                  -->
+    <!-- ======================================================== -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Injecting the User's Real-World Database Keys
+        const firebaseConfig = {
+            apiKey: "AIzaSyB2syVNpzv62u1oPndNaFM7yqpexsRO9EQ",
+            authDomain: "tracking-app-e9350.firebaseapp.com",
+            projectId: "tracking-app-e9350",
+            storageBucket: "tracking-app-e9350.firebasestorage.app",
+            messagingSenderId: "65270939425",
+            appId: "1:65270939425:web:a26610bdf02166e49c4860",
+            measurementId: "G-8NNZWLPSH7"
+        };
+
+        class GlobalTraceSystem {
+            constructor() {
+                this.currentView = 'target';
+                this.isBroadcasting = false;
+                this.telemetryTimer = null;
+                this.activeListener = null;
+                
+                // Safe default start location (Dhaka/Sylhet Region)
+                this.mockLat = 24.8949; 
+                this.mockLng = 91.8687;
+                
+                // Smart memory to prevent API rate-limiting
+                this.addressCache = new Map();
+
+                this.bindElements();
+                this.initFirebase();
+            }
+
+            // Maps physical HTML buttons to Javascript logic
+            bindElements() {
+                this.ui = {
+                    title: document.getElementById('app-title'),
+                    viewBtn: document.getElementById('view-toggle-btn'),
+                    simToggle: document.getElementById('dev-sim-toggle'),
+                    statusDot: document.getElementById('cloud-status-dot'),
+                    statusText: document.getElementById('cloud-status-text'),
+                    logBox: document.getElementById('sys-log'),
+                    
+                    viewTarget: document.getElementById('view-target'),
+                    tInput: document.getElementById('target-id-input'),
+                    tBtn: document.getElementById('btn-broadcast'),
+                    tPanel: document.getElementById('target-telemetry'),
+                    tAddress: document.getElementById('t-address'),
+                    tLat: document.getElementById('t-lat'),
+                    tLng: document.getElementById('t-lng'),
+
+                    viewDispatch: document.getElementById('view-dispatch'),
+                    dInput: document.getElementById('dispatch-id-input'),
+                    dBtn: document.getElementById('btn-trace'),
+                    dPanel: document.getElementById('dispatch-results'),
+                    dStatus: document.getElementById('d-status'),
+                    dAddress: document.getElementById('d-address'),
+                    dLat: document.getElementById('d-lat'),
+                    dLng: document.getElementById('d-lng'),
+                    dTime: document.getElementById('d-time')
+                };
+
+                this.ui.viewBtn.addEventListener('click', () => this.toggleView());
+                this.ui.tBtn.addEventListener('click', () => this.handleBroadcast());
+                this.ui.dBtn.addEventListener('click', () => this.handleSubscribe());
+                
+                // Validate input before allowing button click (UX Best Practice)
+                this.ui.tInput.addEventListener('input', (e) => {
+                    this.ui.tBtn.disabled = e.target.value.trim().length < 3;
+                });
+            }
+
+            // The Central Nervous System Log
+            log(message, type = 'info') {
+                const colors = { info: 'text-gray-400', success: 'text-green-500', error: 'text-red-500', warn: 'text-yellow-500' };
+                const span = document.createElement('span');
+                const time = new Date().toLocaleTimeString();
+                span.className = colors[type] || colors.info;
+                span.textContent = `[${time}] ${message}`;
+                
+                this.ui.logBox.appendChild(span);
+                this.ui.logBox.scrollTop = this.ui.logBox.scrollHeight;
+            }
+
+            // Booting the Cloud Connection
+            async initFirebase() {
+                this.log("Authenticating with Firebase Infrastructure...");
+                try {
+                    this.app = initializeApp(firebaseConfig);
+                    this.auth = getAuth(this.app);
+                    this.db = getFirestore(this.app);
+
+                    // Auth State Observer
+                    onAuthStateChanged(this.auth, (user) => {
+                        this.user = user;
+                        if (user) {
+                            this.ui.statusDot.className = "status-dot dot-green";
+                            this.ui.statusText.textContent = "CONNECTED TO FIREBASE";
+                            this.log("Database linked perfectly!", "success");
+                        } else {
+                            this.ui.statusDot.className = "status-dot dot-red";
+                            this.ui.statusText.textContent = "AUTH FAILED";
+                            this.log("Authentication rejected.", "error");
+                        }
+                    });
+
+                    await signInAnonymously(this.auth);
+
+                } catch (err) {
+                    this.log(`Error: ${err.message}`, "error");
+                    this.ui.statusDot.className = "status-dot dot-yellow";
+                    this.ui.statusText.textContent = "SETUP ERROR";
+                }
+            }
+
+            // UI Context Switcher
+            toggleView() {
+                const toDispatch = this.currentView === 'target';
+                this.currentView = toDispatch ? 'dispatch' : 'target';
+
+                if (toDispatch) {
+                    this.ui.viewTarget.classList.add('hidden');
+                    this.ui.viewTarget.classList.remove('fade-in');
+                    this.ui.viewDispatch.classList.remove('hidden');
+                    this.ui.viewDispatch.classList.add('fade-in');
+                    
+                    this.ui.title.textContent = 'SYS.DISPATCH_NODE';
+                    this.ui.title.className = 'text-xl md:text-2xl font-bold tracking-widest glow-text-blue transition-colors duration-300';
+                    this.ui.viewBtn.textContent = 'SWITCH TO TARGET';
+                } else {
+                    this.ui.viewDispatch.classList.add('hidden');
+                    this.ui.viewDispatch.classList.remove('fade-in');
+                    this.ui.viewTarget.classList.remove('hidden');
+                    this.ui.viewTarget.classList.add('fade-in');
+                    
+                    this.ui.title.textContent = 'SYS.TARGET_NODE';
+                    this.ui.title.className = 'text-xl md:text-2xl font-bold tracking-widest glow-text-green transition-colors duration-300';
+                    this.ui.viewBtn.textContent = 'SWITCH TO DISPATCH';
+                    
+                    // Terminate listeners to save bandwidth/money
+                    if (this.activeListener) {
+                        this.activeListener();
+                        this.activeListener = null;
+                        this.ui.dPanel.classList.add('opacity-40');
+                        this.ui.dStatus.textContent = "SUBSCRIPTION TERMINATED";
+                        this.ui.dStatus.className = "text-gray-500 bg-gray-900/50 px-3 py-1 rounded text-xs border border-gray-700";
+                    }
+                }
+            }
+
+            // --- THE SENDER MODULE ---
+            handleBroadcast() {
+                if (this.isBroadcasting) this.stopBroadcast();
+                else this.startBroadcast();
+            }
+
+            startBroadcast() {
+                if (!this.user || !this.db) {
+                    this.log("System Error: Wait for database to connect.", "error");
+                    return;
+                }
+                const id = this.ui.tInput.value.trim();
+                if (!id) return;
+
+                this.isBroadcasting = true;
+                this.ui.tInput.disabled = true;
+                this.ui.tInput.classList.add('opacity-50');
+                
+                this.ui.tBtn.textContent = "TERMINATE UPLINK";
+                this.ui.tBtn.className = "w-full py-4 bg-red-900/20 hover:bg-red-900/40 border border-red-700/50 text-red-400 font-bold tracking-widest transition-all rounded-lg";
+                
+                this.ui.tPanel.classList.remove('hidden');
+                this.log(`Streaming location data to Firebase for ID: ${id}`, "success");
+                
+                this.publishData(id);
+            }
+
+            stopBroadcast() {
+                this.isBroadcasting = false;
+                clearTimeout(this.telemetryTimer);
+                
+                this.ui.tInput.disabled = false;
+                this.ui.tInput.classList.remove('opacity-50');
+                
+                this.ui.tBtn.textContent = "INITIATE UPLINK";
+                this.ui.tBtn.className = "w-full py-4 bg-emerald-900/20 hover:bg-emerald-900/40 border border-emerald-700/50 text-emerald-400 font-bold tracking-widest transition-all rounded-lg";
+                
+                this.log("Uplink terminated.", "warn");
+            }
+
+            // The main engine loop
+            async publishData(targetId) {
+                if (!this.isBroadcasting) return;
+
+                try {
+                    const coords = await this.getCoordinates();
+                    const address = await this.geocode(coords.lat, coords.lng);
+
+                    // Firestore Write Operation
+                    const docPath = doc(this.db, 'locations', targetId);
+                    await setDoc(docPath, {
+                        lat: coords.lat,
+                        lng: coords.lng,
+                        address: address,
+                        updatedAt: serverTimestamp(), // Authoritative server time
+                    });
+
+                    // Local UI Update
+                    this.ui.tLat.textContent = coords.lat.toFixed(6);
+                    this.ui.tLng.textContent = coords.lng.toFixed(6);
+                    this.ui.tAddress.textContent = address;
+                    
+                    this.log(`Coordinates synced to Cloud successfully.`, "info");
+
+                } catch (error) {
+                    this.log(`Transmission Error: ${error.message}`, "error");
+                }
+
+                // 10 Second Telemetry Loop (Safe for Free APIs)
+                if (this.isBroadcasting) {
+                    this.telemetryTimer = setTimeout(() => this.publishData(targetId), 10000); 
+                }
+            }
+
+            // Hardware Abstraction Layer
+            getCoordinates() {
+                return new Promise((resolve, reject) => {
+                    if (this.ui.simToggle.checked) {
+                        this.mockLat += (Math.random() - 0.5) * 0.0005;
+                        this.mockLng += (Math.random() - 0.5) * 0.0005;
+                        resolve({ lat: this.mockLat, lng: this.mockLng });
+                    } else if ("geolocation" in navigator) {
+                        navigator.geolocation.getCurrentPosition(
+                            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+                            (err) => reject(new Error("Device denied GPS permission.")),
+                            { enableHighAccuracy: true, timeout: 5000 }
+                        );
+                    } else {
+                        reject(new Error("Device lacks GPS support."));
+                    }
+                });
+            }
+
+            // OpenStreetMap Intelligence Engine
+            async geocode(lat, lng) {
+                const cacheKey = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+                if (this.addressCache.has(cacheKey)) return this.addressCache.get(cacheKey);
+
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+                    if (!res.ok) throw new Error("API Limit Reached");
+                    const data = await res.json();
+                    
+                    let place = "Unknown Location";
+                    if (data && data.address) {
+                        const parts = [];
+                        if(data.address.suburb) parts.push(data.address.suburb);
+                        if(data.address.village) parts.push(data.address.village);
+                        if(data.address.city || data.address.town) parts.push(data.address.city || data.address.town);
+                        if(parts.length > 0) place = parts.join(', ');
+                        else if(data.display_name) place = data.display_name.split(',')[0];
+                    }
+                    
+                    this.addressCache.set(cacheKey, place);
+                    return place;
+                } catch (e) {
+                    return "Connecting to map servers...";
+                }
+            }
+
+            // --- THE RECEIVER MODULE ---
+            handleSubscribe() {
+                if (!this.user || !this.db) {
+                    this.log("Cannot trace: Database offline.", "error");
+                    return;
+                }
+                const targetId = this.ui.dInput.value.trim();
+                if (!targetId) return;
+
+                if (this.activeListener) this.activeListener();
+
+                this.ui.dPanel.classList.remove('opacity-40');
+                this.ui.dStatus.textContent = "CHECKING DATABASE...";
+                this.ui.dStatus.className = "text-yellow-500 bg-yellow-900/20 px-3 py-1 rounded text-xs border border-yellow-900/50 animate-pulse";
+                
+                // Firestore Real-Time WebSocket Subscription
+                const docPath = doc(this.db, 'locations', targetId);
+                
+                this.activeListener = onSnapshot(docPath, 
+                    (snapshot) => {
+                        if (snapshot.exists()) {
+                            this.updateDispatchUI(snapshot.data());
+                            this.log(`Data push intercepted successfully.`, "success");
+                        } else {
+                            this.ui.dStatus.textContent = "NO RECORD FOUND";
+                            this.ui.dStatus.className = "glow-text-red bg-red-900/20 px-3 py-1 rounded text-xs border border-red-900/50";
+                        }
+                    },
+                    (error) => {
+                        this.log(`Listener disconnected: ${error.message}`, "error");
+                    }
+                );
+            }
+
+            updateDispatchUI(data) {
+                let isFresh = false;
+                let timeStr = "--";
+                
+                if (data.updatedAt && data.updatedAt.toDate) {
+                    const dbDate = data.updatedAt.toDate();
+                    timeStr = dbDate.toLocaleTimeString();
+                    const ageSeconds = (new Date() - dbDate) / 1000;
+                    // If pinged within 20 seconds, it's a live subject
+                    isFresh = ageSeconds < 20; 
+                }
+
+                this.ui.dStatus.textContent = isFresh ? "LIVE TRACKING" : "OFFLINE (STALE DATA)";
+                this.ui.dStatus.className = isFresh 
+                    ? "glow-text-blue font-bold bg-blue-900/20 px-3 py-1 rounded text-xs border border-blue-900/50 animate-pulse" 
+                    : "text-yellow-500 font-bold bg-yellow-900/20 px-3 py-1 rounded text-xs border border-yellow-900/50";
+                
+                this.ui.dLat.textContent = data.lat ? data.lat.toFixed(6) : "--";
+                this.ui.dLng.textContent = data.lng ? data.lng.toFixed(6) : "--";
+                this.ui.dAddress.textContent = data.address || "Unknown";
+                this.ui.dTime.textContent = timeStr;
+            }
+        }
+
+        // Boot Sequence
+        window.addEventListener('DOMContentLoaded', () => {
+            new GlobalTraceSystem();
+        });
+    </script>
+</body>
+</html>
+
+
+```
